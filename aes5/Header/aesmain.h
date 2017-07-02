@@ -22,7 +22,7 @@ private:
 	void aesRound(uint8_t* state, uint8_t* roundKey);
 	void subBytes(uint8_t* state);
 	void finalRound(uint8_t* state, uint8_t* roundKey);
-	void createRoundKey(const uint8_t* expandedKey, uint8_t* roundKey)
+	void createRoundKey(const uint8_t* expandedKey, uint8_t* roundKey);
 	
 
 };
