@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <iostream>
+#include "..\Header\aesmain.h"
 
 
 
@@ -68,7 +69,7 @@ static const uint8_t Rcon[255] = {
 	0x66, 0xcc, 0x83, 0x1d, 0x3a, 0x74, 0xe8, 0xcb
 };
 
-void rotate(uint8_t* word)
+void AesMain::rotate(uint8_t* word)
 {
 	uint8_t tmp, i;
 
@@ -83,7 +84,7 @@ void rotate(uint8_t* word)
 }
 
 // word: 4x8 bit dataword
-void keyScheduleCore(uint8_t* word, int32_t iteration)
+void AesMain::keyScheduleCore(uint8_t* word, int32_t iteration)
 {
 	uint32_t i;
 
@@ -98,7 +99,7 @@ void keyScheduleCore(uint8_t* word, int32_t iteration)
 }
 
 // keysize in byte
-void expandKey(uint8_t* expandedKey, uint32_t expandedKeySize, const uint8_t* cipherKey, uint32_t keySize)
+void AesMain::expandKey(uint8_t* expandedKey, uint32_t expandedKeySize, const uint8_t* cipherKey, uint32_t keySize)
 {
 	// Current expanded keySize, in bytes
 	uint32_t currentSize = 0;
@@ -134,14 +135,14 @@ void expandKey(uint8_t* expandedKey, uint32_t expandedKeySize, const uint8_t* ci
 	}
 }
 
-void subBytes(uint8_t* state)
+void AesMain::subBytes(uint8_t* state)
 {
 	for (int i = 0; i < 16; i++)
 		state[i] = SBox[state[i]];
 }
 
 
-void shiftRows(uint8_t* state)
+void AesMain::shiftRows(uint8_t* state)
 {
 	uint8_t i;
 
@@ -150,7 +151,7 @@ void shiftRows(uint8_t* state)
 		shiftRow(state + i * 4, i);
 }
 
-void shiftRow(uint8_t* state, uint8_t numShifts)
+void AesMain::shiftRow(uint8_t* state, uint8_t numShifts)
 {
 	uint8_t tmp;
 
@@ -164,13 +165,13 @@ void shiftRow(uint8_t* state, uint8_t numShifts)
 	}
 }
 
-void addRoundKey(uint8_t* state, uint8_t* roundKey)
+void AesMain::addRoundKey(uint8_t* state, uint8_t* roundKey)
 {
 	for (int i = 0; i < 16; i++)
 		state[i] ^= roundKey[i];
 }
 
-uint8_t mulGaloisField2_8(uint8_t a, uint8_t b)
+uint8_t AesMain::mulGaloisField2_8(uint8_t a, uint8_t b)
 {
 	uint8_t p = 0;
 	uint8_t hi_bit_set;
@@ -189,7 +190,7 @@ uint8_t mulGaloisField2_8(uint8_t a, uint8_t b)
 	return p;
 }
 
-void mixColumns(uint8_t* state)
+void AesMain::mixColumns(uint8_t* state)
 {
 
 	uint8_t column[4];
@@ -209,7 +210,7 @@ void mixColumns(uint8_t* state)
 	}
 }
 
-void mixColumn(uint8_t* column)
+void AesMain::mixColumn(uint8_t* column)
 {
 
 	uint8_t tmp[4];
@@ -244,7 +245,7 @@ void mixColumn(uint8_t* column)
 		mulGaloisField2_8(tmp[3], 2);
 }
 
-void aesRound(uint8_t* state, uint8_t* roundKey)
+void AesMain::aesRound(uint8_t* state, uint8_t* roundKey)
 {
 	subBytes(state);
 	shiftRows(state);
@@ -252,21 +253,21 @@ void aesRound(uint8_t* state, uint8_t* roundKey)
 	addRoundKey(state, roundKey);
 }
 
-void finalRound(uint8_t* state, uint8_t* roundKey)
+void AesMain::finalRound(uint8_t* state, uint8_t* roundKey)
 {
 	subBytes(state);
 	shiftRows(state);
 	addRoundKey(state, roundKey);
 }
 
-void createRoundKey(const uint8_t* expandedKey, uint8_t* roundKey)
+void AesMain::createRoundKey(const uint8_t* expandedKey, uint8_t* roundKey)
 {
 	for (int i = 0; i < 4; i++) // cols
 		for (int j = 0; j < 4; j++) // rows
 			roundKey[(i + (j * 4))] = expandedKey[(i * 4) + j];
 }
 
-void aes(uint8_t* state, const uint8_t* key, int numRounds, bool skipFinalRound)
+void AesMain::aes(uint8_t* state, const uint8_t* key, int numRounds, bool skipFinalRound)
 {
 	uint8_t roundKey[16];
 	uint8_t expandedKey[176];
@@ -290,11 +291,10 @@ void aes(uint8_t* state, const uint8_t* key, int numRounds, bool skipFinalRound)
 		
 }
 
-void aesWithoutKeyExpansion(uint8_t* state, const uint8_t* expandedKey, int numRounds, bool skipFinalRound)
+void AesMain::aesWithoutKeyExpansion(uint8_t* state, const uint8_t* expandedKey, int numRounds, bool skipFinalRound)
 {
 	uint8_t roundKey[16];
 	createRoundKey(expandedKey, roundKey);
-
 	addRoundKey(state, roundKey);
 
 	for (int i = 1; i < numRounds; i++)
@@ -302,8 +302,7 @@ void aesWithoutKeyExpansion(uint8_t* state, const uint8_t* expandedKey, int numR
 		createRoundKey(expandedKey + 16 * i, roundKey);
 		aesRound(state, roundKey);
 	}
-
-
+	
 	if (!skipFinalRound)
 	{
 		createRoundKey(expandedKey + 16 * numRounds, roundKey);
@@ -314,7 +313,7 @@ void aesWithoutKeyExpansion(uint8_t* state, const uint8_t* expandedKey, int numR
 
 
 
-void printBlock(uint8_t* block, uint8_t size)
+void AesMain::printBlock(uint8_t* block, uint8_t size)
 {
 	if (!(size % 4))
 	{
@@ -327,3 +326,4 @@ void printBlock(uint8_t* block, uint8_t size)
 	}
 
 }
+
