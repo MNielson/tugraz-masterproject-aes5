@@ -4,7 +4,6 @@
 
 
 
-#include "../Header/aesmain.h"
 #include <stdio.h>
 #include <iostream>
 #include <string>
@@ -50,7 +49,7 @@ StepSizeSetting parseSetting(std::string setting);
 
 static std::mutex mtx;
 
-void main(int argc, char* argv[])
+int main(int argc, char* argv[])
 {
 	
 	StepSizeSetting stepSizeSetting = FULL;
@@ -59,7 +58,7 @@ void main(int argc, char* argv[])
 	if ( (argc == 1 || argc > 4) )
 	{
 		printUsage(argv[0]);
-		return;
+		return 0;
 	}
 	else
 	{
@@ -76,21 +75,6 @@ void main(int argc, char* argv[])
 		}
 	}
 
-	/*
-	AesMain aesMain;
-	uint8_t key[16] = { 0 };
-	uint8_t data[16] = { 0 };
-	uint8_t expandedKey[176];
-	aesMain.expandKey(expandedKey, 176, key, 16);
-
-	printf("Key: \n");
-	aesMain.printBlock(key, 16);
-	printf("\nData In: \n");
-	aesMain.printBlock(data, 16);
-	aesMain.aesWithoutKeyExpansion(data, expandedKey, 10, false);
-	printf("\nData Out: \n");
-	aesMain.printBlock(data, 16);
-	*/
 
 	__m128i key128;
 	key128.m128i_u64[1] = 0x0000000000000000;
@@ -121,8 +105,7 @@ void main(int argc, char* argv[])
 	auto begin = std::chrono::high_resolution_clock::now();
 	//start worker threads
 	for (uint32_t threadNum = 0; threadNum < numThreads; ++threadNum)
-	{
-		if (threadNum+1 == numThreads && stopNum < totalWorkNum - 1)
+	{		if (threadNum+1 == numThreads && stopNum < totalWorkNum - 1)
 		{
 			// make sure all remaining work is handed to last thread
 			// this can lead to last thread getting significantly more work than others (ex: wl 13, th 5)
@@ -174,22 +157,12 @@ void main(int argc, char* argv[])
 		std::cout << pairs << " is NOT a multiple of 8 :(" << std::endl;
 		
 
-
 	//cleanup
 	delete[] res;
 	
-
+	return 0;
 
 }
-/*
-bool isUnevenWork(const uint32_t numWork, const uint32_t numThreads)
-{
-	if (numWork % numThreads == 0)
-		return false;
-	else
-		return true;
-}
-*/
 
 uint64_t workPerThread(const StepSizeSetting setting, const uint64_t numWork, const uint64_t numThreads)
 {
@@ -232,38 +205,12 @@ uint64_t totalWork(StepSizeSetting setting, uint64_t workload, uint64_t numThrea
 	return totalWork;
 }
 
-/*
-void getThreadWorkNums(const uint32_t threadNum, const uint32_t numThreads, const uint32_t stepSize)
-{
-	uint32_t startNum = 0;
-	uint32_t stopNum = 0;
-	uint64_t sz = (uint64_t)1 << 32;
-
-
-	if (threadNum == 0)
-	{
-		startNum = 0;
-		stopNum = stepSize;
-	}
-	else if (threadNum == numThreads)
-	{
-		startNum = threadNum * stepSize + 1;
-		stopNum = UINT32_MAX;
-	}
-	else
-	{
-		startNum = threadNum * stepSize + 1;
-		stopNum = startNum + stepSize - 1;
-	}
-}
-*/
-
 void thrAes5(const uint64_t startNum, const uint64_t stopNum, __m128i expKey[], uint8_t res[])
 {
 	__m128i mes128;
 	__m128i out;
 
-	for (uint64_t i = startNum; i <= stopNum; ++i)
+	for (uint64_t i = startNum; i <= stopNum; i++)
 	{
 		
 		// build plaintext
@@ -272,7 +219,7 @@ void thrAes5(const uint64_t startNum, const uint64_t stopNum, __m128i expKey[], 
 
 		mes128.m128i_u8[0]  = (uint8_t)(i >> 24); // msb
 		mes128.m128i_u8[5]  = (uint8_t)(i >> 16);
-		mes128.m128i_u8[9]  = (uint8_t)(i >>  8);
+		mes128.m128i_u8[10] = (uint8_t)(i >>  8);
 		mes128.m128i_u8[15] = (uint8_t)(i >>  0); // lsb
 
 		// do 5 rounds aes
@@ -293,16 +240,24 @@ void thrAes5(const uint64_t startNum, const uint64_t stopNum, __m128i expKey[], 
 
 		// restore diagonal val
 
-		uint32_t diag = uint32_t((out.m128i_u8[0])  << 24 |
-			                     (out.m128i_u8[5])  << 16 |
-			                     (out.m128i_u8[9])  <<  8 |
-			                     (out.m128i_u8[15]) <<  0);
+		uint32_t x1 = out.m128i_u8[ 0];
+		uint32_t x2 = out.m128i_u8[13];
+		uint32_t x3 = out.m128i_u8[10];
+		uint32_t x4 = out.m128i_u8[ 7];
+
+		x1 = x1 <<  0;
+		x2 = x2 <<  8;
+		x3 = x3 << 16;
+		x4 = x4 << 24;
+		
+		uint32_t diag = ( x1 | x2 | x3 | x4 );
 
 		
-		mtx.lock();
+		//mtx.lock();
 		res[diag] = res[diag] + 1;
-		mtx.unlock();
+		//mtx.unlock();
 	}
+
 
 }
 
