@@ -58,8 +58,8 @@ int main(int argc, char* argv[])
 	uint8_t k15 = rand();
 	//                             lsb                                                               msb
 	//                             15   14   13   12   11   10   9   8   7   6   5   4   3   2   1   0
-	//__m128i key128 = _mm_setr_epi8(k15, k14, k13, k12, k11, k10, k9, k8, k7, k6, k5, k4, k3, k2, k1, k0);
-	__m128i key128 = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+	__m128i key128 = _mm_setr_epi8(k15, k14, k13, k12, k11, k10, k9, k8, k7, k6, k5, k4, k3, k2, k1, k0);
+	//__m128i key128 = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
 
 	__m128i expKey[11];
@@ -121,7 +121,7 @@ int main(int argc, char* argv[])
 		//                       lsb						                                       msb
 		//                       15   14   13   12   11   10   9   8   7   6   5   4   3   2   1   0
         //mes128 = _mm_setr_epi8(c15, c14, c13, c12, c11, c10, c9, c8, c7, c6, c5, c4, c3, c2, c1, c0);
-		mes128   = _mm_setr_epi8(v15, 0, 0, 0, 0, v10, 0, 0, 0, 0, v5, 0, 0, 0, 0, v0);
+		mes128   = _mm_setr_epi8(v15, c14, c13, c12, c11, v10, c9, c8, c7, c6, v5, c4, c3, c2, c1, v0);
 
 		// do 5 rounds aes
 		// load the 16 bytes message into m 
