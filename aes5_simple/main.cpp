@@ -15,6 +15,8 @@
 #include <cstdint>
 
 #define TWO_P_32 4294967296
+#define BUFFER_SIZE 64
+
 
 #define KEYEXP(K, I) aes128_keyexpand(K, _mm_aeskeygenassist_si128(K, I))
 __m128i aes128_keyexpand(__m128i key, __m128i keygened)
@@ -46,6 +48,11 @@ void aesFun(uint8_t* res, __m128i* expKey, uint8_t* con)
 	uint8_t v15 = 0;
 	__m128i mes128;
 	__m128i* resMem = (__m128i *)aligned_malloc(128, 16);
+
+	uint32_t* buffer = (uint32_t*)calloc(BUFFER_SIZE, sizeof(uint32_t));
+	int elemensInBuffer = 0;
+
+
 	for (uint64_t i = 0; i < TWO_P_32;)
 	{
 
@@ -87,8 +94,21 @@ void aesFun(uint8_t* res, __m128i* expKey, uint8_t* con)
 		x4 = x4 << 24;
 
 		volatile uint32_t diag = (x1 | x2 | x3 | x4);
+		//res[diag] = res[diag] + 1;
 
-		res[diag] = res[diag] + 1;
+		buffer[elemensInBuffer] = diag;
+		
+		elemensInBuffer++;
+		
+		if (elemensInBuffer == BUFFER_SIZE)
+		{
+			for (int j = 0; j < elemensInBuffer; j++)
+			{
+				uint32_t t = buffer[j];
+				res[t] = res[t] + 1;
+			}
+			elemensInBuffer = 0;
+			}
 		i = i + 1;
 	}
 	
@@ -169,60 +189,6 @@ int main(int argc, char* argv[])
 	std::thread t1(aesFun, res, expKey, con);
 	t1.join();
 
-/*
-//	uint8_t v0  = 0;
-//	uint8_t v5  = 0;
-//	uint8_t v10 = 0;
-//	uint8_t v15 = 0;
-//	__m128i* resMem = (__m128i *)aligned_malloc(128, 16);
-//	for (uint64_t i = startNum; i < TWO_P_32;)
-//	{
-//
-//		// build plaintext
-//		v0 = (uint8_t)(i >> 24); // msb
-//		v5 = (uint8_t)(i >> 16);
-//		v10 = (uint8_t)(i >> 8);
-//		v15 = (uint8_t)(i >> 0); // lsb
-//
-//		//                       lsb						                                       msb
-//		//                       15   14   13   12   11   10   9   8   7   6   5   4   3   2   1   0
-//        //mes128 = _mm_setr_epi8(c15, c14, c13, c12, c11, c10, c9, c8, c7, c6, c5, c4, c3, c2, c1, c0);
-//		mes128   = _mm_setr_epi8(v15, con[14], con[13], con[12], con[11], v10, con[9], con[8], con[7], con[6], v5, con[4], con[3], con[2], con[1], v0);
-//
-//		// do 5 rounds aes
-//		// load the 16 bytes message into m 
-//		__m128i m = _mm_load_si128((const __m128i *) &mes128);
-//		// first xor the loaded message with k0, which is the AES key supplied /
-//		m = _mm_xor_si128(m, expKey[0]);
-//		// then do 5 rounds of aesenc, using the associated key parts /
-//		m = _mm_aesenc_si128(m, expKey[1]);
-//		m = _mm_aesenc_si128(m, expKey[2]);
-//		m = _mm_aesenc_si128(m, expKey[3]);
-//		m = _mm_aesenc_si128(m, expKey[4]);
-//		m = _mm_aesenclast_si128(m, expKey[5]);
-//		// and then we store the result in an out variable /
-//		_mm_store_si128( resMem, m);
-//
-//		// restore diagonal val
-//		unsigned char* foo = (unsigned char*)resMem;
-//		uint32_t x1 = foo[0];
-//		uint32_t x2 = foo[13];
-//		uint32_t x3 = foo[10];
-//		uint32_t x4 = foo[7];
-//		
-//		x1 = x1 << 0;
-//		x2 = x2 << 8;
-//		x3 = x3 << 16;
-//		x4 = x4 << 24;
-//
-//		volatile uint32_t diag = (x1 | x2 | x3 | x4);
-//
-//		res[diag] = res[diag] + 1;
-//		i = i + 1;
-//
-//	}
-*/
-	
 	auto end = std::chrono::high_resolution_clock::now();
 	std::cout << "Finished main work in " << std::chrono::duration_cast<std::chrono::minutes>(end - begin).count() << " minutes." << std::endl;
 	uint64_t workDone = 0;
@@ -259,12 +225,5 @@ int main(int argc, char* argv[])
 	return 0;
 
 }
-
-
-
-
-
-
-
 
 #endif
