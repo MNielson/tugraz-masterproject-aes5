@@ -285,7 +285,4 @@ StepSizeSetting parseSetting(std::string setting)
 	else
 		return FULL;
 }
-
-
-
 #endif
