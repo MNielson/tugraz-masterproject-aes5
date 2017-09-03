@@ -1,7 +1,6 @@
 #ifndef __AES_NI_H__
 #define __AES_NI_H__
 
-
 #include <stdio.h>
 #include <iostream>
 #include <string>
@@ -51,9 +50,6 @@ typedef struct {
 	double variance;
 	double skew;
 } StatisticResult;
-
-
-
 
 uint64_t aesDistinguisherWorker(uint8_t* res, __m128i key, uint8_t* con)
 {
@@ -164,7 +160,6 @@ Sample aesDistinguisher(uint8_t* res, uint64_t memSize)
 
 	sample.collisions = aesDistinguisherWorker(res, key128, sample.con);
 	return sample;
-	
 }
 
 StatisticResult computeStatistics(Sample* samples, uint64_t numSample)
@@ -225,13 +220,11 @@ int main(int argc, char* argv[])
 	}
 	auto end   = std::chrono::high_resolution_clock::now();
 
+	std::cout << "Finished work in " << std::chrono::duration_cast<std::chrono::minutes>(end - begin).count() << " minutes." << std::endl;
 
-	
-
-	std::cout << "Finished main work in " << std::chrono::duration_cast<std::chrono::minutes>(end - begin).count() << " minutes." << std::endl;
-
-	//cleanup
 	delete[] res;
+	delete[] samples;
+	delete[] statisticResults;
 	return 0;
 }
 
