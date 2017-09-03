@@ -16,6 +16,8 @@
 
 #define TWO_P_32 4294967296
 #define BUFFER_SIZE 64
+#define SAMPLES 4
+#define INTER_RES 2
 
 
 #define KEYEXP(K, I) aes128_keyexpand(K, _mm_aeskeygenassist_si128(K, I))
@@ -37,6 +39,12 @@ inline void* aligned_malloc(size_t size, size_t align) {
 #endif
 	return result;
 }
+
+typedef struct {
+	uint8_t con[16];
+	uint8_t key[16];
+	uint64_t collisions;
+} Sample;
 
 
 uint64_t aesDistinguisher(uint8_t* res, __m128i key, uint8_t* con)
@@ -133,26 +141,29 @@ uint64_t aesDistinguisher(uint8_t* res, __m128i key, uint8_t* con)
 int main(int argc, char* argv[])
 {
 	uint8_t* res = (uint8_t*)calloc(TWO_P_32, sizeof(uint8_t));
-
+	
+	Sample* s1 = new Sample;
+	
 	memset(res, 0, TWO_P_32 * sizeof(uint8_t));
 
 	srand((unsigned int)time(NULL));
 	// generate random key
-	uint8_t key[16];
+
 	for (int i = 0; i < 16; ++i)
-		key[i] = rand();
-	__m128i key128 = _mm_setr_epi8(key[15], key[14], key[13], key[12], key[11], key[10], key[9], key[8], key[7], key[6], key[5], key[4], key[3], key[2], key[1], key[0]);
+		s1->key[i] = rand();
+	__m128i key128 = _mm_setr_epi8(s1->key[15], s1->key[14], s1->key[13], s1->key[12], s1->key[11], s1->key[10], s1->key[9], s1->key[8], s1->key[7], s1->key[6], s1->key[5], s1->key[4], s1->key[3], s1->key[2], s1->key[1], s1->key[0]);
 
 	// generate random const
-	uint8_t con[16];
 	for (int i = 0; i < 16; ++i)
-		con[i] = rand();
+		s1->con[i] = rand();
 
 	auto begin = std::chrono::high_resolution_clock::now();
-	uint64_t collisions = aesDistinguisher(res, key128, con);
+	
+	s1->collisions = aesDistinguisher(res, key128, s1->con);
+	
 	auto end = std::chrono::high_resolution_clock::now();
 	std::cout << "Finished main work in " << std::chrono::duration_cast<std::chrono::minutes>(end - begin).count() << " minutes." << std::endl;
-	if (collisions % 8 == 0)
+	if (s1->collisions % 8 == 0)
 		std::cout << ":)" << std::endl;
 
 	//cleanup
