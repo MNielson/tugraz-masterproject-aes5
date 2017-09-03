@@ -39,7 +39,7 @@ inline void* aligned_malloc(size_t size, size_t align) {
 }
 
 
-void aesFun(uint8_t* res, __m128i* expKey, uint8_t* con)
+uint64_t aesFun(uint8_t* res, __m128i* expKey, uint8_t* con)
 {
 	
 	uint8_t v0 = 0;
@@ -111,7 +111,21 @@ void aesFun(uint8_t* res, __m128i* expKey, uint8_t* con)
 			}
 		i = i + 1;
 	}
-	
+
+	uint64_t collisions = 0;
+	uint64_t tmp = 0;
+	for (uint64_t i = 0; i <= TWO_P_32; ++i)
+	{
+		tmp = 0;
+		if (res[i] > 1)
+			tmp = (res[i] * (res[i] - 1)) / 2;
+		collisions += tmp;
+	}
+
+	if (collisions % 8)
+		std::cerr << "Error: " << collisions << "is not a multiple of 8." << std::endl;
+
+	return collisions;
 }
 
 int main(int argc, char* argv[])
@@ -135,11 +149,7 @@ int main(int argc, char* argv[])
 	key[13] = rand();
 	key[14] = rand();
 	key[15] = rand();
-	//                             lsb                                                               msb
-	//                             15   14   13   12   11   10   9   8   7   6   5   4   3   2   1   0
 	__m128i key128 = _mm_setr_epi8(key[15], key[14], key[13], key[12], key[11], key[10], key[9], key[8], key[7], key[6], key[5], key[4], key[3], key[2], key[1], key[0]);
-	//__m128i key128 = _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-
 
 	__m128i expKey[11];
 	expKey[0] =  _mm_load_si128((__m128i*)(&key128));
@@ -156,14 +166,6 @@ int main(int argc, char* argv[])
 
 	//volatile uint64_t sz = (uint64_t)1 << 32;
 	uint8_t* res = (uint8_t*)calloc(TWO_P_32, sizeof(uint8_t));
-		
-	volatile uint64_t startNum = 0;
-	//volatile uint64_t stopNum = 1;
-	//stopNum = stopNum << 32;
-	//std::cout << "StopNum: " << stopNum << std::endl;
-	//std::cout << "Sz:      "      << sz << std::endl;
-
-	//__m128i mes128;
 
 	// generate random const
 	uint8_t con[16];
@@ -185,45 +187,15 @@ int main(int argc, char* argv[])
 	con[15] = rand();
 
 	auto begin = std::chrono::high_resolution_clock::now();
-
-	std::thread t1(aesFun, res, expKey, con);
-	t1.join();
-
+	uint64_t collisions = aesFun(res, expKey, con);
 	auto end = std::chrono::high_resolution_clock::now();
 	std::cout << "Finished main work in " << std::chrono::duration_cast<std::chrono::minutes>(end - begin).count() << " minutes." << std::endl;
-	uint64_t workDone = 0;
-	for (uint64_t i = 0; i <= TWO_P_32; ++i)
-		workDone += res[i];
-	std::cout << "Detected " << workDone << " pieces of work done" << std::endl;
-
-
-
-	auto begin3 = std::chrono::high_resolution_clock::now();
-	uint64_t pairs = 0;
-	uint64_t tmp = 0;
-	for (uint64_t i = 0; i <= TWO_P_32; ++i)
-	{
-		tmp = 0;
-		if (res[i] > 1)
-			tmp = (res[i] * (res[i] - 1)) / 2;
-		pairs += tmp;
-	}
-
-	uint64_t remainder = pairs % 8;
-	auto end3 = std::chrono::high_resolution_clock::now();
-	std::cout << "Detected " << pairs << " pairs in " << std::chrono::duration_cast<std::chrono::milliseconds>(end3 - begin3).count() << " milliseconds" << std::endl;
-
-	if (remainder == 0)
-		std::cout << pairs << " is a multiple of 8 :)" << std::endl;
-	else
-		std::cout << pairs << " is NOT a multiple of 8 :(" << std::endl;
-
+	if (collisions % 8 == 0)
+		std::cout << ":)" << std::endl;
 
 	//cleanup
 	delete[] res;
-
 	return 0;
-
 }
 
 #endif
