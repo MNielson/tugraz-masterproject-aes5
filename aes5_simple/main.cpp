@@ -39,9 +39,8 @@ inline void* aligned_malloc(size_t size, size_t align) {
 }
 
 
-uint64_t aesFun(uint8_t* res, __m128i* expKey, uint8_t* con)
+uint64_t aesDistinguisher(uint8_t* res, __m128i key, uint8_t* con)
 {
-	
 	uint8_t v0 = 0;
 	uint8_t v5 = 0;
 	uint8_t v10 = 0;
@@ -49,22 +48,25 @@ uint64_t aesFun(uint8_t* res, __m128i* expKey, uint8_t* con)
 	__m128i mes128;
 	__m128i* resMem = (__m128i *)aligned_malloc(128, 16);
 
+	__m128i expKey[6];
+	expKey[0] = _mm_load_si128((__m128i*)(&key));
+	expKey[1] = KEYEXP(expKey[0], 0x01);
+	expKey[2] = KEYEXP(expKey[1], 0x02);
+	expKey[3] = KEYEXP(expKey[2], 0x04);
+	expKey[4] = KEYEXP(expKey[3], 0x08);
+	expKey[5] = KEYEXP(expKey[4], 0x10);
+
 	uint32_t* buffer = (uint32_t*)calloc(BUFFER_SIZE, sizeof(uint32_t));
 	int elemensInBuffer = 0;
-
-
+	
 	for (uint64_t i = 0; i < TWO_P_32;)
 	{
-
 		// build plaintext
 		v0 = (uint8_t)(i >> 24); // msb
 		v5 = (uint8_t)(i >> 16);
 		v10 = (uint8_t)(i >> 8);
 		v15 = (uint8_t)(i >> 0); // lsb
 
-								 //                       lsb						                                       msb
-								 //                       15   14   13   12   11   10   9   8   7   6   5   4   3   2   1   0
-								 //mes128 = _mm_setr_epi8(c15, c14, c13, c12, c11, c10, c9, c8, c7, c6, c5, c4, c3, c2, c1, c0);
 		mes128 = _mm_setr_epi8(v15, con[14], con[13], con[12], con[11], v10, con[9], con[8], con[7], con[6], v5, con[4], con[3], con[2], con[1], v0);
 
 		// do 5 rounds aes
@@ -130,64 +132,24 @@ uint64_t aesFun(uint8_t* res, __m128i* expKey, uint8_t* con)
 
 int main(int argc, char* argv[])
 {
+	uint8_t* res = (uint8_t*)calloc(TWO_P_32, sizeof(uint8_t));
+
+	memset(res, 0, TWO_P_32 * sizeof(uint8_t));
+
 	srand((unsigned int)time(NULL));
 	// generate random key
 	uint8_t key[16];
-	key[ 0] = rand();
-	key[ 1] = rand();
-	key[ 2] = rand();
-	key[ 3] = rand();
-	key[ 4] = rand();
-	key[ 5] = rand();
-	key[ 6] = rand();
-	key[ 7] = rand();
-	key[ 8] = rand();
-	key[ 9] = rand();
-	key[10] = rand();
-	key[11] = rand();
-	key[12] = rand();
-	key[13] = rand();
-	key[14] = rand();
-	key[15] = rand();
+	for (int i = 0; i < 16; ++i)
+		key[i] = rand();
 	__m128i key128 = _mm_setr_epi8(key[15], key[14], key[13], key[12], key[11], key[10], key[9], key[8], key[7], key[6], key[5], key[4], key[3], key[2], key[1], key[0]);
-
-	__m128i expKey[11];
-	expKey[0] =  _mm_load_si128((__m128i*)(&key128));
-	expKey[1] =  KEYEXP(expKey[0], 0x01);
-	expKey[2] =  KEYEXP(expKey[1], 0x02);
-	expKey[3] =  KEYEXP(expKey[2], 0x04);
-	expKey[4] =  KEYEXP(expKey[3], 0x08);
-	expKey[5] =  KEYEXP(expKey[4], 0x10);
-	expKey[6] =  KEYEXP(expKey[5], 0x20);
-	expKey[7] =  KEYEXP(expKey[6], 0x40);
-	expKey[8] =  KEYEXP(expKey[7], 0x80);
-	expKey[9] =  KEYEXP(expKey[8], 0x1B);
-	expKey[10] = KEYEXP(expKey[9], 0x36);
-
-	//volatile uint64_t sz = (uint64_t)1 << 32;
-	uint8_t* res = (uint8_t*)calloc(TWO_P_32, sizeof(uint8_t));
 
 	// generate random const
 	uint8_t con[16];
-	con[ 0]= rand();
-	con[ 1]= rand();
-	con[ 2]= rand();
-	con[ 3]= rand();
-	con[ 4]= rand();
-	con[ 5]= rand();
-	con[ 6]= rand();
-	con[ 7]= rand();
-	con[ 8]= rand();
-	con[ 9]= rand();
-	con[10] = rand();
-	con[11] = rand();
-	con[12] = rand();
-	con[13] = rand();
-	con[14] = rand();
-	con[15] = rand();
+	for (int i = 0; i < 16; ++i)
+		con[i] = rand();
 
 	auto begin = std::chrono::high_resolution_clock::now();
-	uint64_t collisions = aesFun(res, expKey, con);
+	uint64_t collisions = aesDistinguisher(res, key128, con);
 	auto end = std::chrono::high_resolution_clock::now();
 	std::cout << "Finished main work in " << std::chrono::duration_cast<std::chrono::minutes>(end - begin).count() << " minutes." << std::endl;
 	if (collisions % 8 == 0)
