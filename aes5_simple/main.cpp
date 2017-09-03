@@ -163,7 +163,6 @@ Sample aesDistinguisher(uint8_t* res, uint64_t memSize)
 		sample.con[i] = rand();
 
 	sample.collisions = aesDistinguisherWorker(res, key128, sample.con);
-	std::cout << sample.collisions << std::endl;
 	return sample;
 	
 }
@@ -203,13 +202,30 @@ StatisticResult computeStatistics(Sample* samples, uint64_t numSample)
 int main(int argc, char* argv[])
 {
 	uint8_t* res = (uint8_t*)calloc(TWO_P_32, sizeof(uint8_t));
+	Sample* samples = (Sample*)calloc(SAMPLES, sizeof( Sample));
+	StatisticResult* statisticResults = (StatisticResult*)calloc(SAMPLES / INTER_RES, sizeof(StatisticResult));
 
+	int j = 0;
 	auto begin = std::chrono::high_resolution_clock::now();
-	Sample s = aesDistinguisher(res, TWO_P_32 * sizeof(uint8_t));
+	for (int i = 0; i < SAMPLES; i++)
+	{
+		samples[i] = aesDistinguisher(res, TWO_P_32 * sizeof(uint8_t));
+		std::cout << samples[i].collisions << std::endl;
+		if (samples[i].collisions % 8 == 0)
+			std::cout << ":)" << std::endl;
+
+		if ((i + 1) % INTER_RES == 0)
+		{
+			statisticResults[j] = computeStatistics(samples, i + 1);
+			std::cout << "Mean: " << statisticResults[j].mean << std::endl;
+			std::cout << "Variance: " << statisticResults[j].variance << std::endl;
+			std::cout << "Skew: " << statisticResults[j].skew << std::endl;
+			j++;
+		}
+	}
 	auto end   = std::chrono::high_resolution_clock::now();
-	std::cout << s.collisions << std::endl;
-	if (s.collisions % 8 == 0)
-		std::cout << ":)" << std::endl;
+
+
 	
 
 	std::cout << "Finished main work in " << std::chrono::duration_cast<std::chrono::minutes>(end - begin).count() << " minutes." << std::endl;
