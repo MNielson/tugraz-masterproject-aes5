@@ -46,8 +46,16 @@ typedef struct {
 	uint64_t collisions;
 } Sample;
 
+typedef struct {
+	double mean;
+	double variance;
+	double skew;
+} StatisticResult;
 
-uint64_t aesDistinguisher(uint8_t* res, __m128i key, uint8_t* con)
+
+
+
+uint64_t aesDistinguisherWorker(uint8_t* res, __m128i key, uint8_t* con)
 {
 	uint8_t v0 = 0;
 	uint8_t v5 = 0;
@@ -138,33 +146,73 @@ uint64_t aesDistinguisher(uint8_t* res, __m128i key, uint8_t* con)
 	return collisions;
 }
 
-int main(int argc, char* argv[])
+Sample aesDistinguisher(uint8_t* res, uint64_t memSize)
 {
-	uint8_t* res = (uint8_t*)calloc(TWO_P_32, sizeof(uint8_t));
-	
-	Sample* s1 = new Sample;
-	
-	memset(res, 0, TWO_P_32 * sizeof(uint8_t));
+	memset(res, 0, memSize);
+	Sample sample;
 
 	srand((unsigned int)time(NULL));
 	// generate random key
 
 	for (int i = 0; i < 16; ++i)
-		s1->key[i] = rand();
-	__m128i key128 = _mm_setr_epi8(s1->key[15], s1->key[14], s1->key[13], s1->key[12], s1->key[11], s1->key[10], s1->key[9], s1->key[8], s1->key[7], s1->key[6], s1->key[5], s1->key[4], s1->key[3], s1->key[2], s1->key[1], s1->key[0]);
+		sample.key[i] = rand();
+	__m128i key128 = _mm_setr_epi8(sample.key[15], sample.key[14], sample.key[13], sample.key[12], sample.key[11], sample.key[10], sample.key[9], sample.key[8], sample.key[7], sample.key[6], sample.key[5], sample.key[4], sample.key[3], sample.key[2], sample.key[1], sample.key[0]);
 
 	// generate random const
 	for (int i = 0; i < 16; ++i)
-		s1->con[i] = rand();
+		sample.con[i] = rand();
+
+	sample.collisions = aesDistinguisherWorker(res, key128, sample.con);
+	std::cout << sample.collisions << std::endl;
+	return sample;
+	
+}
+
+StatisticResult computeStatistics(Sample* samples, uint64_t numSample)
+{
+	StatisticResult sRes;
+
+	//compute mean
+	double tMean = 0;
+	for (uint64_t i = 0; i < numSample; i++)
+	{
+		tMean += samples[i].collisions;
+	}	
+	sRes.mean = tMean / numSample;
+
+	//compute variance
+	double tVariance = 0;
+	for (uint64_t i = 0; i < numSample; i++)
+	{
+		tVariance += pow(samples[i].collisions - sRes.mean, 2);
+	}
+	sRes.variance = tVariance / (numSample - 1);
+
+	//compute skew
+	double tL = 0;
+	for (uint64_t i = 0; i < numSample; i++)
+	{
+		tL += pow(samples[i].collisions - sRes.mean, 3);
+	}
+	double l = tL / numSample;
+	sRes.skew = l / pow(sRes.variance, 1.5);
+
+	return sRes;
+}
+
+int main(int argc, char* argv[])
+{
+	uint8_t* res = (uint8_t*)calloc(TWO_P_32, sizeof(uint8_t));
 
 	auto begin = std::chrono::high_resolution_clock::now();
-	
-	s1->collisions = aesDistinguisher(res, key128, s1->con);
-	
-	auto end = std::chrono::high_resolution_clock::now();
-	std::cout << "Finished main work in " << std::chrono::duration_cast<std::chrono::minutes>(end - begin).count() << " minutes." << std::endl;
-	if (s1->collisions % 8 == 0)
+	Sample s = aesDistinguisher(res, TWO_P_32 * sizeof(uint8_t));
+	auto end   = std::chrono::high_resolution_clock::now();
+	std::cout << s.collisions << std::endl;
+	if (s.collisions % 8 == 0)
 		std::cout << ":)" << std::endl;
+	
+
+	std::cout << "Finished main work in " << std::chrono::duration_cast<std::chrono::minutes>(end - begin).count() << " minutes." << std::endl;
 
 	//cleanup
 	delete[] res;
