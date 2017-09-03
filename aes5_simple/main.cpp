@@ -193,8 +193,8 @@ StatisticResult computeStatistics(Sample* samples, uint64_t numSample)
 	{
 		tL += pow(samples[i].collisions - sRes.mean, 3);
 	}
-	double l = tL / numSample;
-	sRes.skew = l / pow(sRes.variance, 1.5);
+	double tSkew = tL / numSample;
+	sRes.skew = tSkew / pow(sRes.variance, 1.5);
 
 	return sRes;
 }
@@ -211,8 +211,8 @@ int main(int argc, char* argv[])
 	{
 		samples[i] = aesDistinguisher(res, TWO_P_32 * sizeof(uint8_t));
 		std::cout << samples[i].collisions << std::endl;
-		if (samples[i].collisions % 8 == 0)
-			std::cout << ":)" << std::endl;
+		if (samples[i].collisions % 8)
+			std::cout << ":(" << std::endl;
 
 		if ((i + 1) % INTER_RES == 0)
 		{
