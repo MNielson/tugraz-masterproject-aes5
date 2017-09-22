@@ -12,6 +12,9 @@
 #include <sstream>
 #include <random>
 #include <cstdint>
+#include <string>
+#include <iostream>
+#include <fstream>
 
 #define TWO_P_32 4294967296
 #define BUFFER_SIZE 64
@@ -50,6 +53,86 @@ typedef struct {
 	double variance;
 	double skew;
 } StatisticResult;
+
+
+std::string toString(uint8_t block[16])
+{
+	std::string str = "";
+	char buffer[100];
+	for (int i = 0; i < 16; i = i + 4)
+	{
+		sprintf_s(buffer, "%X %X %X %X\n", block[i], block[i + 1], block[i + 2], block[i + 3]);
+		str += buffer;
+	}
+	return str;
+}
+
+std::string toString(StatisticResult s)
+{
+	std::string str = "";
+	char buffer[100];
+	sprintf_s(buffer, "mean: %f\n", s.mean);
+	str += buffer;
+	sprintf_s(buffer, "variance: %f\n", s.variance);
+	str += buffer;
+	sprintf_s(buffer, "skew: %f\n", s.skew);
+	str += buffer;
+	return str;
+}
+
+std::string toString(uint64_t value) {
+	std::ostringstream os;
+	os << value;
+	return os.str();
+}
+
+std::string toString(Sample s)
+{
+	std::string str = "";
+	char buffer[1000];
+	sprintf_s(buffer, "collisions: %s\n", toString(s.collisions).c_str());
+	str += buffer;
+	sprintf_s(buffer, "constant:\n%s", toString(s.con).c_str());
+	str += buffer;
+	sprintf_s(buffer, "key:\n%s", toString(s.key).c_str());
+	str += buffer;
+	return str;
+}
+
+void toFile(Sample* s, int elements, char* fileName)
+{
+	std::ofstream file;
+	file.open(fileName);
+	if (file.is_open())
+	{
+		file << elements << " samples" << std::endl;
+		for (int i = 0; i < elements; i++)
+		{
+			file << "## Sample " << i << " ##" << std::endl;
+			file << toString(s[i]);
+		}
+		file.close();
+	}	
+	return;
+}
+
+void toFile(StatisticResult* s, int elements, char* fileName)
+{
+	std::ofstream file;
+	file.open(fileName);
+	if (file.is_open())
+	{
+		file << elements << " Results" << std::endl;
+		for (int i = 0; i < elements; i++)
+		{
+			file << "## Result " << i << " ##" << std::endl;
+			file << "Calculated from " << i * INTER_RES << "samples" << std::endl;
+			file << toString(s[i]);
+		}
+		file.close();
+	}
+	return;
+}
 
 uint64_t aesDistinguisherWorker(uint8_t* res, __m128i key, uint8_t* con)
 {
@@ -212,9 +295,12 @@ int main(int argc, char* argv[])
 		if ((i + 1) % INTER_RES == 0)
 		{
 			statisticResults[j] = computeStatistics(samples, i + 1);
-			std::cout << "Mean: " << statisticResults[j].mean << std::endl;
-			std::cout << "Variance: " << statisticResults[j].variance << std::endl;
-			std::cout << "Skew: " << statisticResults[j].skew << std::endl;
+			char filename[100];
+			sprintf_s(filename, "StatisticsResult%d.txt", j);
+			toFile(statisticResults, j, filename);
+			//std::cout << "Mean: " << statisticResults[j].mean << std::endl;
+			//std::cout << "Variance: " << statisticResults[j].variance << std::endl;
+			//std::cout << "Skew: " << statisticResults[j].skew << std::endl;
 			j++;
 		}
 	}
