@@ -18,8 +18,8 @@
 
 #define TWO_P_32 4294967296
 #define BUFFER_SIZE 64
-#define SAMPLES 4
-#define INTER_RES 2
+#define SAMPLES 64
+#define INTER_RES 4
 
 
 #define KEYEXP(K, I) aes128_keyexpand(K, _mm_aeskeygenassist_si128(K, I))
@@ -126,7 +126,7 @@ void toFile(StatisticResult* s, int elements, char* fileName)
 		for (int i = 0; i < elements; i++)
 		{
 			file << "## Result " << i << " ##" << std::endl;
-			file << "Calculated from " << i * INTER_RES << "samples" << std::endl;
+			file << "Calculated from " << (i+1) * INTER_RES << " samples" << std::endl;
 			file << toString(s[i]);
 		}
 		file.close();
@@ -296,12 +296,19 @@ int main(int argc, char* argv[])
 		{
 			statisticResults[j] = computeStatistics(samples, i + 1);
 			char filename[100];
-			sprintf_s(filename, "StatisticsResult%d.txt", j);
-			toFile(statisticResults, j, filename);
-			//std::cout << "Mean: " << statisticResults[j].mean << std::endl;
-			//std::cout << "Variance: " << statisticResults[j].variance << std::endl;
-			//std::cout << "Skew: " << statisticResults[j].skew << std::endl;
-			j++;
+			sprintf_s(filename, "StatisticsResult%d.txt", j+1);
+			toFile(statisticResults, j+1, filename);
+#ifdef DEBUG
+			char filenameSamples[100];
+			sprintf_s(filenameSamples, "Samples%d.txt", i + 1);
+			toFile(filenameSamples, "Samples", i+1)
+#endif // DEBUG
+
+			
+			std::cout << "Mean: " << statisticResults[j].mean << std::endl;
+			std::cout << "Variance: " << statisticResults[j].variance << std::endl;
+			std::cout << "Skew: " << statisticResults[j].skew << std::endl;
+			j = j + 1;
 		}
 	}
 	auto end   = std::chrono::high_resolution_clock::now();
