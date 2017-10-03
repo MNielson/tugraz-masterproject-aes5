@@ -15,8 +15,8 @@
 
 #define TWO_P_32 4294967296
 #define BUFFER_SIZE 64
-#define SAMPLES 4
-#define INTER_RES 2
+#define SAMPLES 8
+#define INTER_RES 4
 
 
 #define KEYEXP(K, I) aes128_keyexpand(K, _mm_aeskeygenassist_si128(K, I))
@@ -59,6 +59,9 @@ uint64_t aesDistinguisherWorker(uint8_t* res, __m128i key, uint8_t* con)
 	uint8_t v15 = 0;
 	__m128i mes128;
 	__m128i* resMem = (__m128i *)aligned_malloc(128, 16);
+	if (resMem == NULL)
+		throw std::invalid_argument("NULL pointer receive.");
+
 
 	__m128i expKey[6];
 	expKey[0] = _mm_load_si128((__m128i*)(&key));
@@ -69,6 +72,9 @@ uint64_t aesDistinguisherWorker(uint8_t* res, __m128i key, uint8_t* con)
 	expKey[5] = KEYEXP(expKey[4], 0x10);
 
 	uint32_t* buffer = (uint32_t*)calloc(BUFFER_SIZE, sizeof(uint32_t));
+	if (buffer == NULL)
+		throw std::invalid_argument("NULL pointer receive.");
+
 	int elemensInBuffer = 0;
 	
 	for (uint64_t i = 0; i < TWO_P_32;)
@@ -137,7 +143,7 @@ uint64_t aesDistinguisherWorker(uint8_t* res, __m128i key, uint8_t* con)
 	}
 
 	if (collisions % 8)
-		std::cerr << "Error: " << collisions << "is not a multiple of 8." << std::endl;
+		std::cerr << "Error: " << collisions << " is not a multiple of 8." << std::endl;
 
 	return collisions;
 }
@@ -197,8 +203,16 @@ StatisticResult computeStatistics(Sample* samples, uint64_t numSample)
 int main(int argc, char* argv[])
 {
 	uint8_t* res = (uint8_t*)calloc(TWO_P_32, sizeof(uint8_t));
+	if (res == NULL)
+		throw std::invalid_argument("NULL pointer receive.");
+
 	Sample* samples = (Sample*)calloc(SAMPLES, sizeof( Sample));
+	if (samples == NULL)
+		throw std::invalid_argument("NULL pointer receive.");
+
 	StatisticResult* statisticResults = (StatisticResult*)calloc(SAMPLES / INTER_RES, sizeof(StatisticResult));
+	if (statisticResults == NULL)
+		throw std::invalid_argument("NULL pointer receive.");
 
 	int j = 0;
 	auto begin = std::chrono::high_resolution_clock::now();
