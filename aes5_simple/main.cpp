@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <iostream>
 #include <string>
-#include <cstring>
 #include <wmmintrin.h>
 #include <thread>
 #include <vector>
@@ -13,13 +12,28 @@
 #include <sstream>
 #include <random>
 #include <cstdint>
+#include <string>
+#include <iostream>
+#include <fstream>
 #include <cstring>
+#include <sys/types.h>
+
+#ifdef _MSC_VER
+	#include <sys/types.h>
+	#include <stdio.h>
+	#include <process.h>
+#else
+	#include <sys/types.h>
+	#include <unistd.h>
+#endif
+
 
 #define TWO_P_32 4294967296
-//#define TWO_P_32 5
 #define BUFFER_SIZE 64
 #define SAMPLES 4
 #define INTER_RES 2
+#define DTYPE uint8_t
+
 
 
 #define KEYEXP(K, I) aes128_keyexpand(K, _mm_aeskeygenassist_si128(K, I))
@@ -42,6 +56,17 @@ inline void* aligned_malloc(size_t size, size_t align) {
 	return result;
 }
 
+std::string getProcessID()
+{
+	int pid;
+#ifdef _MSC_VER 
+	pid = _getpid();
+#else
+	pid = getpid();
+#endif
+	return std::to_string(pid);
+}
+
 typedef struct {
 	uint8_t con[16];
 	uint8_t key[16];
@@ -54,7 +79,87 @@ typedef struct {
 	double skew;
 } StatisticResult;
 
-uint64_t aesDistinguisherWorker(uint32_t* res, __m128i key, uint8_t* con)
+
+std::string toString(uint8_t block[16])
+{
+	std::string str = "";
+	char buffer[100];
+	for (int i = 0; i < 16; i = i + 4)
+	{
+		snprintf(buffer, 100, "%X %X %X %X\n", block[i], block[i + 1], block[i + 2], block[i + 3]);
+		str += buffer;
+	}
+	return str;
+}
+
+std::string toString(StatisticResult s)
+{
+	std::string str = "";
+	char buffer[100];
+	snprintf(buffer, 100, "mean: %f\n", s.mean);
+	str += buffer;
+	snprintf(buffer, 100, "variance: %f\n", s.variance);
+	str += buffer;
+	snprintf(buffer, 100, "skew: %f\n", s.skew);
+	str += buffer;
+	return str;
+}
+
+std::string toString(uint64_t value) {
+	std::ostringstream os;
+	os << value;
+	return os.str();
+}
+
+std::string toString(Sample s)
+{
+	std::string str = "";
+	char buffer[1000];
+	snprintf(buffer, 1000, "collisions: %s\n", toString(s.collisions).c_str());
+	str += buffer;
+	snprintf(buffer, 1000, "constant:\n%s", toString(s.con).c_str());
+	str += buffer;
+	snprintf(buffer, 1000, "key:\n%s", toString(s.key).c_str());
+	str += buffer;
+	return str;
+}
+
+void toFile(Sample* s, int elements, std::string fileName)
+{
+	std::ofstream file;
+	file.open(fileName);
+	if (file.is_open())
+	{
+		file << elements << " samples" << std::endl;
+		for (int i = 0; i < elements; i++)
+		{
+			file << "## Sample " << i << " ##" << std::endl;
+			file << toString(s[i]);
+		}
+		file.close();
+	}
+	return;
+}
+
+void toFile(StatisticResult* s, int elements, std::string fileName)
+{
+	std::ofstream file;
+	file.open(fileName);
+	if (file.is_open())
+	{
+		file << elements << " Results" << std::endl;
+		for (int i = 0; i < elements; i++)
+		{
+			file << "## Result " << i << " ##" << std::endl;
+			file << "Calculated from " << (i + 1) * INTER_RES << " samples" << std::endl;
+			file << toString(s[i]);
+		}
+		file.close();
+	}
+	return;
+}
+
+uint64_t aesDistinguisherWorker(DTYPE* res, __m128i key, uint8_t* con)
 {
 	uint8_t v0 = 0;
 	uint8_t v5 = 0;
@@ -62,6 +167,9 @@ uint64_t aesDistinguisherWorker(uint32_t* res, __m128i key, uint8_t* con)
 	uint8_t v15 = 0;
 	__m128i mes128;
 	__m128i* resMem = (__m128i *)aligned_malloc(128, 16);
+	if (resMem == NULL)
+		throw std::invalid_argument("NULL pointer receive.");
+
 
 	__m128i expKey[6];
 	expKey[0] = _mm_load_si128((__m128i*)(&key));
@@ -72,12 +180,13 @@ uint64_t aesDistinguisherWorker(uint32_t* res, __m128i key, uint8_t* con)
 	expKey[5] = KEYEXP(expKey[4], 0x10);
 
 	uint32_t* buffer = (uint32_t*)calloc(BUFFER_SIZE, sizeof(uint32_t));
+	if (buffer == NULL)
+		throw std::invalid_argument("NULL pointer receive.");
+
 	int elemensInBuffer = 0;
-	uint32_t diag = 0;
-	uint32_t x1, x2, x3, x4;
+
 	for (uint64_t i = 0; i < TWO_P_32;)
 	{
-		diag = 0;
 		// build plaintext
 		v0 = (uint8_t)(i >> 24); // msb
 		v5 = (uint8_t)(i >> 16);
@@ -98,65 +207,60 @@ uint64_t aesDistinguisherWorker(uint32_t* res, __m128i key, uint8_t* con)
 		m = _mm_aesenc_si128(m, expKey[4]);
 		m = _mm_aesenclast_si128(m, expKey[5]);
 		// and then we store the result in an out variable /
-		_mm_store_si128((__m128i *) resMem, m);
-		//(resMem, m);
+		_mm_store_si128(resMem, m);
 
 		// restore diagonal val
-		uint8_t* foo = (uint8_t*)resMem;
+		unsigned char* foo = (unsigned char*)resMem;
+		uint32_t x1 = foo[0];
+		uint32_t x2 = foo[13];
+		uint32_t x3 = foo[10];
+		uint32_t x4 = foo[7];
 
-		x1 = ((uint32_t)foo[0])  << 0;
-		x2 = ((uint32_t)foo[13]) << 8;
-		x3 = ((uint32_t)foo[10]) << 16;
-		x4 = ((uint32_t)foo[7])  << 24;
+		x1 = x1 << 0;
+		x2 = x2 << 8;
+		x3 = x3 << 16;
+		x4 = x4 << 24;
 
-		diag = x1 | x2 | x3 | x4;
-		/*
-		std::cout << "foo: " << std::endl << foo[0] <<  std::endl << foo[13] << std::endl << foo[10] << std::endl << foo[7] << std::endl;
-		std::cout << "foo: " << std::endl << x1 << std::endl << x2 << std::endl << x3 << std::endl << x4 << std::endl;
-		std::cout << "diag:" << std::endl << diag << std::endl << std::endl << std::endl;
-		*/
-		/**/
-		if (res[diag] == 0xFFFFFFFF)
-			std::cerr << "Error: array overflow for diagonal " << diag << "while handling text # : " << i << std::endl;
-		res[diag] = res[diag] + 1;
+		volatile uint32_t diag = (x1 | x2 | x3 | x4);
+		//res[diag] = res[diag] + 1;
 
-		/*
 		buffer[elemensInBuffer] = diag;
-		
+
 		elemensInBuffer++;
-		
+
 		if (elemensInBuffer == BUFFER_SIZE)
 		{
 			for (int j = 0; j < elemensInBuffer; j++)
 			{
 				uint32_t t = buffer[j];
-				if(res[t] == 0xFFFFFFFF)
-					std::cerr << "Error: array overflow for diagonal " << t << std::endl;
 				res[t] = res[t] + 1;
 			}
 			elemensInBuffer = 0;
 		}
-		*/
 		i = i + 1;
 	}
 
 	uint64_t collisions = 0;
 	uint64_t tmp = 0;
+	uint64_t numElems = 0;
 	for (uint64_t i = 0; i <= TWO_P_32; ++i)
 	{
 		tmp = 0;
+		numElems += res[i];
 		if (res[i] > 1)
 			tmp = (res[i] * (res[i] - 1)) / 2;
 		collisions += tmp;
 	}
 
+	if (numElems < TWO_P_32)
+		std::cerr << "Error: Expected " << TWO_P_32 << " elements, received " << numElems << std::endl;
 	if (collisions % 8)
-		std::cerr << "Error: " << collisions << "is not a multiple of 8." << std::endl;
+		std::cerr << "Error: " << collisions << " is not a multiple of 8." << std::endl;
 
 	return collisions;
 }
 
-Sample aesDistinguisher(uint32_t* res, uint64_t memSize)
+Sample aesDistinguisher(DTYPE* res, uint64_t memSize)
 {
 	memset(res, 0, memSize);
 	Sample sample;
@@ -185,7 +289,7 @@ StatisticResult computeStatistics(Sample* samples, uint64_t numSample)
 	for (uint64_t i = 0; i < numSample; i++)
 	{
 		tMean += samples[i].collisions;
-	}	
+	}
 	sRes.mean = tMean / numSample;
 
 	//compute variance
@@ -210,20 +314,32 @@ StatisticResult computeStatistics(Sample* samples, uint64_t numSample)
 
 int main(int argc, char* argv[])
 {
-	uint32_t* res = (uint32_t*)calloc(TWO_P_32, sizeof(uint32_t));
-	Sample* samples = (Sample*)calloc(SAMPLES, sizeof(Sample));
-	StatisticResult* statisticResults = (StatisticResult*)calloc(SAMPLES / INTER_RES, sizeof(StatisticResult));
-	if (res == NULL || samples == NULL || statisticResults == NULL)
+	DTYPE* res = (DTYPE*)calloc(TWO_P_32, sizeof(DTYPE));
+	if (res == NULL)
 	{
-		std::cout << "Critical Error - Failed to allocated memory." << std::endl;
-		return 0;
+		std::cerr << "Not enough memory." << std::endl;
+		throw std::invalid_argument("NULL pointer receive.");
 	}
-	
+
+	Sample* samples = (Sample*)calloc(SAMPLES, sizeof(Sample));
+	if (samples == NULL)
+	{
+		std::cerr << "Not enough memory." << std::endl;
+		throw std::invalid_argument("NULL pointer receive.");
+	}
+
+	StatisticResult* statisticResults = (StatisticResult*)calloc(SAMPLES / INTER_RES, sizeof(StatisticResult));
+	if (statisticResults == NULL)
+	{
+		std::cerr << "Not enough memory." << std::endl;
+		throw std::invalid_argument("NULL pointer receive.");
+	}
+
 	int j = 0;
 	auto begin = std::chrono::high_resolution_clock::now();
 	for (int i = 0; i < SAMPLES; i++)
 	{
-		samples[i] = aesDistinguisher(res, TWO_P_32 * sizeof(uint32_t));
+		samples[i] = aesDistinguisher(res, TWO_P_32 * sizeof(DTYPE));
 		std::cout << samples[i].collisions << std::endl;
 		if (samples[i].collisions % 8)
 			std::cout << ":(" << std::endl;
@@ -231,13 +347,17 @@ int main(int argc, char* argv[])
 		if ((i + 1) % INTER_RES == 0)
 		{
 			statisticResults[j] = computeStatistics(samples, i + 1);
+
+			toFile(statisticResults, j + 1, "StatisticsResult" + std::to_string(j + 1) + "-" + getProcessID() + ".txt");
+			toFile(samples,          i + 1, "Samples"          + std::to_string(i + 1) + "-" + getProcessID() + ".txt");
+
 			std::cout << "Mean: " << statisticResults[j].mean << std::endl;
 			std::cout << "Variance: " << statisticResults[j].variance << std::endl;
 			std::cout << "Skew: " << statisticResults[j].skew << std::endl;
-			j++;
+			j = j + 1;
 		}
 	}
-	auto end   = std::chrono::high_resolution_clock::now();
+	auto end = std::chrono::high_resolution_clock::now();
 
 	std::cout << "Finished work in " << std::chrono::duration_cast<std::chrono::minutes>(end - begin).count() << " minutes." << std::endl;
 
