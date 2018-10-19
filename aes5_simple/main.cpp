@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <string>
+#include <cstring>
 #include <wmmintrin.h>
 #include <thread>
 #include <vector>
@@ -12,8 +13,10 @@
 #include <sstream>
 #include <random>
 #include <cstdint>
+#include <cstring>
 
 #define TWO_P_32 4294967296
+//#define TWO_P_32 5
 #define BUFFER_SIZE 64
 #define SAMPLES 4
 #define INTER_RES 2
@@ -51,7 +54,7 @@ typedef struct {
 	double skew;
 } StatisticResult;
 
-uint64_t aesDistinguisherWorker(uint8_t* res, __m128i key, uint8_t* con)
+uint64_t aesDistinguisherWorker(uint32_t* res, __m128i key, uint8_t* con)
 {
 	uint8_t v0 = 0;
 	uint8_t v5 = 0;
@@ -70,9 +73,11 @@ uint64_t aesDistinguisherWorker(uint8_t* res, __m128i key, uint8_t* con)
 
 	uint32_t* buffer = (uint32_t*)calloc(BUFFER_SIZE, sizeof(uint32_t));
 	int elemensInBuffer = 0;
-	
+	uint32_t diag = 0;
+	uint32_t x1, x2, x3, x4;
 	for (uint64_t i = 0; i < TWO_P_32;)
 	{
+		diag = 0;
 		// build plaintext
 		v0 = (uint8_t)(i >> 24); // msb
 		v5 = (uint8_t)(i >> 16);
@@ -93,23 +98,29 @@ uint64_t aesDistinguisherWorker(uint8_t* res, __m128i key, uint8_t* con)
 		m = _mm_aesenc_si128(m, expKey[4]);
 		m = _mm_aesenclast_si128(m, expKey[5]);
 		// and then we store the result in an out variable /
-		_mm_store_si128(resMem, m);
+		_mm_store_si128((__m128i *) resMem, m);
+		//(resMem, m);
 
 		// restore diagonal val
-		unsigned char* foo = (unsigned char*)resMem;
-		uint32_t x1 = foo[0];
-		uint32_t x2 = foo[13];
-		uint32_t x3 = foo[10];
-		uint32_t x4 = foo[7];
+		uint8_t* foo = (uint8_t*)resMem;
 
-		x1 = x1 << 0;
-		x2 = x2 << 8;
-		x3 = x3 << 16;
-		x4 = x4 << 24;
+		x1 = ((uint32_t)foo[0])  << 0;
+		x2 = ((uint32_t)foo[13]) << 8;
+		x3 = ((uint32_t)foo[10]) << 16;
+		x4 = ((uint32_t)foo[7])  << 24;
 
-		volatile uint32_t diag = (x1 | x2 | x3 | x4);
-		//res[diag] = res[diag] + 1;
+		diag = x1 | x2 | x3 | x4;
+		/*
+		std::cout << "foo: " << std::endl << foo[0] <<  std::endl << foo[13] << std::endl << foo[10] << std::endl << foo[7] << std::endl;
+		std::cout << "foo: " << std::endl << x1 << std::endl << x2 << std::endl << x3 << std::endl << x4 << std::endl;
+		std::cout << "diag:" << std::endl << diag << std::endl << std::endl << std::endl;
+		*/
+		/**/
+		if (res[diag] == 0xFFFFFFFF)
+			std::cerr << "Error: array overflow for diagonal " << diag << "while handling text # : " << i << std::endl;
+		res[diag] = res[diag] + 1;
 
+		/*
 		buffer[elemensInBuffer] = diag;
 		
 		elemensInBuffer++;
@@ -119,10 +130,13 @@ uint64_t aesDistinguisherWorker(uint8_t* res, __m128i key, uint8_t* con)
 			for (int j = 0; j < elemensInBuffer; j++)
 			{
 				uint32_t t = buffer[j];
+				if(res[t] == 0xFFFFFFFF)
+					std::cerr << "Error: array overflow for diagonal " << t << std::endl;
 				res[t] = res[t] + 1;
 			}
 			elemensInBuffer = 0;
-			}
+		}
+		*/
 		i = i + 1;
 	}
 
@@ -142,7 +156,7 @@ uint64_t aesDistinguisherWorker(uint8_t* res, __m128i key, uint8_t* con)
 	return collisions;
 }
 
-Sample aesDistinguisher(uint8_t* res, uint64_t memSize)
+Sample aesDistinguisher(uint32_t* res, uint64_t memSize)
 {
 	memset(res, 0, memSize);
 	Sample sample;
@@ -196,15 +210,20 @@ StatisticResult computeStatistics(Sample* samples, uint64_t numSample)
 
 int main(int argc, char* argv[])
 {
-	uint8_t* res = (uint8_t*)calloc(TWO_P_32, sizeof(uint8_t));
-	Sample* samples = (Sample*)calloc(SAMPLES, sizeof( Sample));
+	uint32_t* res = (uint32_t*)calloc(TWO_P_32, sizeof(uint32_t));
+	Sample* samples = (Sample*)calloc(SAMPLES, sizeof(Sample));
 	StatisticResult* statisticResults = (StatisticResult*)calloc(SAMPLES / INTER_RES, sizeof(StatisticResult));
-
+	if (res == NULL || samples == NULL || statisticResults == NULL)
+	{
+		std::cout << "Critical Error - Failed to allocated memory." << std::endl;
+		return 0;
+	}
+	
 	int j = 0;
 	auto begin = std::chrono::high_resolution_clock::now();
 	for (int i = 0; i < SAMPLES; i++)
 	{
-		samples[i] = aesDistinguisher(res, TWO_P_32 * sizeof(uint8_t));
+		samples[i] = aesDistinguisher(res, TWO_P_32 * sizeof(uint32_t));
 		std::cout << samples[i].collisions << std::endl;
 		if (samples[i].collisions % 8)
 			std::cout << ":(" << std::endl;
