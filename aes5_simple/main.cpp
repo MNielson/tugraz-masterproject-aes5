@@ -86,6 +86,7 @@ std::string toString(uint8_t block[16])
 	char buffer[100];
 	for (int i = 0; i < 16; i = i + 4)
 	{
+
 		snprintf(buffer, 100, "%X %X %X %X\n", block[i], block[i + 1], block[i + 2], block[i + 3]);
 		str += buffer;
 	}
@@ -96,11 +97,13 @@ std::string toString(StatisticResult s)
 {
 	std::string str = "";
 	char buffer[100];
+
 	snprintf(buffer, 100, "mean: %f\n", s.mean);
 	str += buffer;
 	snprintf(buffer, 100, "variance: %f\n", s.variance);
 	str += buffer;
 	snprintf(buffer, 100, "skew: %f\n", s.skew);
+
 	str += buffer;
 	return str;
 }
@@ -115,16 +118,20 @@ std::string toString(Sample s)
 {
 	std::string str = "";
 	char buffer[1000];
+
 	snprintf(buffer, 1000, "collisions: %s\n", toString(s.collisions).c_str());
 	str += buffer;
 	snprintf(buffer, 1000, "constant:\n%s", toString(s.con).c_str());
 	str += buffer;
 	snprintf(buffer, 1000, "key:\n%s", toString(s.key).c_str());
+
 	str += buffer;
 	return str;
 }
 
+
 void toFile(Sample* s, int elements, std::string fileName)
+
 {
 	std::ofstream file;
 	file.open(fileName);
@@ -158,6 +165,7 @@ void toFile(StatisticResult* s, int elements, std::string fileName)
 	}
 	return;
 }
+
 
 uint64_t aesDistinguisherWorker(DTYPE* res, __m128i key, uint8_t* con)
 {
@@ -335,6 +343,7 @@ int main(int argc, char* argv[])
 		throw std::invalid_argument("NULL pointer receive.");
 	}
 
+
 	int j = 0;
 	auto begin = std::chrono::high_resolution_clock::now();
 	for (int i = 0; i < SAMPLES; i++)
@@ -347,7 +356,6 @@ int main(int argc, char* argv[])
 		if ((i + 1) % INTER_RES == 0)
 		{
 			statisticResults[j] = computeStatistics(samples, i + 1);
-
 			toFile(statisticResults, j + 1, "StatisticsResult" + std::to_string(j + 1) + "-" + getProcessID() + ".txt");
 			toFile(samples,          i + 1, "Samples"          + std::to_string(i + 1) + "-" + getProcessID() + ".txt");
 
